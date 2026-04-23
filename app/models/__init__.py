@@ -1,1 +1,3 @@
-# This file marks the models folder as a Python package.
+from flask_sqlalchemy import SQLAlchemy
+
+db = SQLAlchemy()

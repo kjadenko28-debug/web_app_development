@@ -1,34 +1,87 @@
-# 資料庫設計 (DB Design) - 任務管理系統
+# 資料庫設計 (DB Design) - 校園訂餐系統
 
-## 1. ER 圖 (實體關係圖)
-目前的系統為初階的 MVP 階段，主要只有任務 (`tasks`) 的資料表。
+## 1. ER 圖（實體關係圖）
 
 ```mermaid
 erDiagram
-  tasks {
-    INTEGER id PK
-    TEXT title
-    INTEGER status
-    DATETIME created_at
-    DATETIME updated_at
+  USER {
+    int id PK
+    string email
+    string password_hash
+    string name
+    string role "student or shop"
+    datetime created_at
   }
+  
+  MENU_ITEM {
+    int id PK
+    int shop_id FK "References USER.id"
+    string name
+    string description
+    float price
+    boolean is_available
+    datetime created_at
+  }
+  
+  ORDER {
+    int id PK
+    int student_id FK "References USER.id"
+    int shop_id FK "References USER.id"
+    float total_price
+    string status "pending, accepted, ready, completed, cancelled"
+    datetime pickup_time
+    datetime created_at
+  }
+  
+  ORDER_ITEM {
+    int id PK
+    int order_id FK "References ORDER.id"
+    int menu_item_id FK "References MENU_ITEM.id"
+    int quantity
+    float unit_price
+  }
+
+  USER ||--o{ MENU_ITEM : "管理"
+  USER ||--o{ ORDER : "下單 (Student)"
+  USER ||--o{ ORDER : "接收 (Shop)"
+  ORDER ||--|{ ORDER_ITEM : "包含"
+  MENU_ITEM ||--o{ ORDER_ITEM : "記錄於定單中"
 ```
 
 ## 2. 資料表詳細說明
 
-### `tasks` 待辦任務表
-儲存系統中所有的待辦動作與任務。
-- `id` (INTEGER PRIMARY KEY AUTOINCREMENT): 主鍵，作為識別各個任務的唯一值。自動遞增。
-- `title` (TEXT): 任務名稱與標題。此欄位必填 (NOT NULL) 且不能為空白。
-- `status` (INTEGER): 任務完成狀態。`0` 代表未完成/待辦；`1` 代表已完成。必定要給值 (NOT NULL)，預設為 `0`。
-- `created_at` (DATETIME): 任務建立時間。採用 SQLite 預設 `CURRENT_TIMESTAMP` 值。
-- `updated_at` (DATETIME): 任務修改時間。新建時與建立時間相同，在後續有修改或完成狀態異動時可做對應更新。
+### 2.1. USER (使用者資料表)
+整合存放學生與餐廳店家資訊，利用 `role` 欄位區分。
+- **id**: 主鍵 (INTEGER AUTIOINCREMENT)
+- **email**: 登入帳號 (TEXT, UNIQUE, 必填)
+- **password_hash**: 密碼雜湊 (TEXT, 必填)
+- **name**: 學生姓名或店家名稱 (TEXT, 必填)
+- **role**: 權限角色 (TEXT, 預設 'student', 只能是 'student' 或 'shop')
+- **created_at**: 註冊時間 (DATETIME, 預設當下)
 
-## 3. SQL 建表語法
-對應建立 Schema 的 SQL 檔案位於 `database/schema.sql` 之中。
+### 2.2. MENU_ITEM (餐廳菜單)
+由店家角色建立的餐點。
+- **id**: 主鍵
+- **shop_id**: 外鍵，對應 `USER.id` (必須屬於一個 role='shop' 的 user)
+- **name**: 餐點名字 (TEXT, 必填)
+- **description**: 餐點描述 (TEXT)
+- **price**: 金額 (REAL, 必填)
+- **is_available**: 是否可供應 (BOOLEAN, 預設 TRUE)
+- **created_at**: 建立時間
 
-## 4. Python Model 程式碼
-根據 架構設計文件 的決定，專案直接透過 `sqlite3` 操作 SQLite 資料庫，避免初期導入重量級的 ORM。
-所有 `CRUD (Create, Read, Update, Delete)` 操作已進行封裝並具備妥善的 **SQL Injection** 防護機制。
+### 2.3. ORDER (訂單紀錄)
+- **id**: 主鍵
+- **student_id**: 點餐的學生外鍵的 `USER.id`
+- **shop_id**: 接單的店家外鍵對應 `USER.id`
+- **total_price**: 整筆訂單加總金額 (REAL)
+- **status**: 訂單狀態 (TEXT, 包含：'pending', 'accepted', 'ready', 'completed', 'cancelled')
+- **pickup_time**: 預計取餐時間 (DATETIME)
+- **created_at**: 訂單建立時間 (DATETIME)
 
-Model 程式碼位於: `app/models/task.py`
+### 2.4. ORDER_ITEM (訂單餐點細項)
+記錄一筆訂單內買了什麼品項及其數量。
+- **id**: 主鍵
+- **order_id**: 對應 `ORDER.id`
+- **menu_item_id**: 對應 `MENU_ITEM.id`
+- **quantity**: 購買數量 (INTEGER, 必填)
+- **unit_price**: 當下購買的單價（為了防止店家日後改價導致過去歷史訂單總額變動） (REAL)
